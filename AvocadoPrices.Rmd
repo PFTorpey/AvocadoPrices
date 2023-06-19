@@ -1,0 +1,423 @@
+---
+title: "AvocadoPrices"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Predicting Avocado Prices
+
+Link to Kaggle dataset: https://www.kaggle.com/neuromusic/avocado-prices
+Predict: AveragePrice
+
+Methods: Weighted Least Squares
+
+Import the data
+
+```{r}
+raw_avocado = read.csv("C:/Users/peter/OneDrive/Documents/avocado.csv")
+# 18,249
+```
+
+Chgeck
+
+```{r}
+hist(raw_avocado$AveragePrice)
+#sum(raw_avocado$AveragePrice > 2.6)
+```
+
+
+
+Remove any nulls in the data
+
+```{r}
+raw_avocado = na.omit(raw_avocado)
+```
+
+Rename those three columns: https://loveonetoday.com/how-to/identify-hass-avocados/
+
+Total Volume - Total sales volume of avocados
+4046 - Total sales volume of avocados with PLU 4046
+4225 - Total sales volume of avocados with PLU 4225
+4770 - Total sales volume of avocados with PLU 4770
+
+```{r}
+
+```
+
+Extracting month up from the Date column and then deleting date
+
+```{r}
+# Month
+raw_avocado$month = substr(raw_avocado$Date, 6, 7)
+
+# Drop Old Date Column and New date column but leave month and year
+raw_avocado$Date = NULL
+```
+
+Eliminate Column "X"
+
+```{r}
+raw_avocado$X <- NULL
+```
+
+Look at unique values for each column
+
+```{r}
+#unique(raw_avocado$XLarge.Bags) # continuous variable, numeric
+# unique(raw_avocado$type) # factor level
+unique(raw_avocado$region) # factor level 
+#unique(raw_avocado$YEAR) # factor level 
+```
+Factor Level variables 
+1. Type (conventional, organic)
+2. Region (54 regions) Should you narrow these down into 4 or 5?
+3. Year (2015-2018)
+
+Trim Region down into 5 groups: NE, SE, MW (MidWest), W (West not in CA), CA
+
+Unknown if Portland refers to OR or ME?? Will omit from data
+
+```{r}
+CA <- c("California","LosAngeles","Sacramento","SanDiego","SanFrancisco")
+
+W <- c("Boise","DallasFtWorth","Denver","LasVegas","PhoenixTucson","Seattle","Spokane","West","WestTexNewMexico")
+
+SE <- c("BaltimoreWashington","Charlotte","Houston","Jacksonville","Louisville","MiamiFtLauderdale","Midsouth","Nashville","NewOrleansMobile","Orlando","RaleighGreensboro","RichmondNorfolk","Roanoke","SouthCarolina","SouthCentral","Southeast","Tampa")
+
+NE <- c("Albany","Boston","BuffaloRochester","HarrisburgScranton","HartfordSpringfield","NewYork","Northeast","NorthernNewEngland","Philadelphia","Pittsburgh","Syracuse")
+
+MW <- c("Chicago","CincinnatiDayton","Columbus","Detroit","GrandRapids","GreatLakes","Indianapolis","Midsouth","Plains","StLouis")
+```
+
+Create new Region based on 5 categories created above
+
+```{r}
+raw_avocado$NewRegion = rep(NA, length(raw_avocado$region))
+raw_avocado$NewRegion[which(raw_avocado$region %in% NE)] = "NE"
+raw_avocado$NewRegion[which(raw_avocado$region %in% MW)] = "MW"
+raw_avocado$NewRegion[which(raw_avocado$region %in% SE)] = "SE"
+raw_avocado$NewRegion[which(raw_avocado$region %in% W)] = "W"
+raw_avocado$NewRegion[which(raw_avocado$region %in% CA)] = "CA"
+
+# drop region column
+raw_avocado$region = NULL
+
+# drop any rows NA
+raw_avocado = na.omit(raw_avocado) # lose ~ 1k
+```
+
+
+Find data types for each variable
+
+```{r}
+sapply(raw_avocado,class)
+```
+
+Tell R to treat the following variables as factors
+
+```{r}
+raw_avocado$type<-as.factor(raw_avocado$type)
+raw_avocado$month<-as.factor(raw_avocado$month)
+raw_avocado$year<-as.factor(raw_avocado$year)
+raw_avocado$NewRegion<-as.factor(raw_avocado$NewRegion)
+```
+
+Check to see if any numeric values contain zero
+X4046
+X4225
+X4770
+Total.Bags
+Small.Bags
+Large.Bags
+XLarge.Bags 
+
+```{r}
+summary(raw_avocado)
+```
+
+Check to see which variables could benefit from log transformation
+
+```{r}
+hist(raw_avocado$AveragePrice)
+hist(raw_avocado$Total.Volume)
+hist(raw_avocado$X4046)
+hist(raw_avocado$X4225)
+hist(raw_avocado$X4770)
+hist(raw_avocado$Total.Bags)
+hist(raw_avocado$Small.Bags)
+hist(raw_avocado$Large.Bags)
+hist(raw_avocado$XLarge.Bags)
+```
+
+Pretty much all of them. Scale all numeric variables. Columns that contain '0' will be log transformed with +1
+
+```{r}
+raw_avocado$AveragePrice<-log(raw_avocado$AveragePrice)
+raw_avocado$Total.Volume<-log(raw_avocado$Total.Volume)
+raw_avocado$X4046<-log(raw_avocado$X4046+1)
+raw_avocado$X4225<-log(raw_avocado$X4225+1)
+raw_avocado$X4770<-log(raw_avocado$X4770+1)
+raw_avocado$Total.Bags<-log(raw_avocado$Total.Bags+1)
+raw_avocado$Small.Bags<-log(raw_avocado$Small.Bags+1)
+raw_avocado$Large.Bags<-log(raw_avocado$Large.Bags+1)
+raw_avocado$XLarge.Bags<-log(raw_avocado$XLarge.Bags+1)
+```
+
+Check Hist of them now
+
+```{r}
+boxplot(raw_avocado$AveragePrice)
+boxplot(raw_avocado$Total.Volume)
+boxplot(raw_avocado$X4046)
+boxplot(raw_avocado$X4225)
+boxplot(raw_avocado$X4770)
+boxplot(raw_avocado$Total.Bags)
+boxplot(raw_avocado$Small.Bags)
+boxplot(raw_avocado$Large.Bags)
+boxplot(raw_avocado$XLarge.Bags)
+```
+
+Try lm model
+
+```{r}
+fit = lm(AveragePrice ~., data=raw_avocado)
+summary(fit)
+par(mfrow = c(2,2))
+plot(fit)
+```
+
+#######################################################################################
+
+Linear Regression from MIDTERM
+
+```{r}
+set.seed(1,sample.kind = "Rounding")
+library(leaps)
+model_1.regfit<-regsubsets(AveragePrice~.,data=raw_avocado,nvmax=75)
+model_1.regfit.summary=summary(model_1.regfit)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_1.regfit.summary$rss,xlab="Number of Variables",ylab="RSS",type="l")
+plot(model_1.regfit.summary$adjr2,xlab="Number of Variables",ylab="Adj R2",type="l")
+plot(model_1.regfit.summary$bic,xlab="Number of Variables",ylab="BIC",type="l")
+plot(model_1.regfit.summary$cp,xlab="Number of Variables",ylab="CP",type="l")
+```
+```{r}
+# Plot adjusted r2
+plot(model_1.regfit,scale="adjr2")
+
+# store regfit into variable to view summary
+model_1.regfit.summary<-summary(model_1.regfit)
+model_1.regfit.summary$adjr2
+
+# adjr
+which.max(model_1.regfit.summary$adjr2)
+```
+
+
+#########################################################################################
+
+Method:
+Iteratively Weighted Least Squares Regression
+
+# Don't use
+```{r}
+fit.w = lm(AveragePrice ~., data = raw_avocado)
+
+oldcoef = rep(0,length(fit.w$coef))
+newcoef = fit.w$coef
+iter = 0
+
+while(sum(abs(oldcoef)) > 0.0001 & iter < 100){
+  w = 1/(fit.w$fittedvalues^2) # find new weights
+  fit.w = lm(AveragePrice ~., data = raw_avocado, weights = w) # Re-fit the model
+  
+  iter = iter + 1
+  oldcoef = newcoef
+  newcoef = fit.w$coef
+}
+plot(fit.w)
+iter
+```
+
+
+
+```{r}
+fit.w=lm(AveragePrice ~ Total.Volume + X4046 + X4225 + X4770 + Total.Bags + Small.Bags + Large.Bags + type + year + month + NewRegion, data = raw_avocado)
+
+oldcoef=rep(0,length(fit.w$coef))
+newcoef=fit.w$coef
+iter=0
+
+while(sum(abs(oldcoef-newcoef))>.0001 & iter < 100){
+MAR=median(abs(fit.w$residuals))
+k=1.345*MAR/0.6745
+w=pmin(k/abs(fit.w$residuals),1)
+fit.w=lm(AveragePrice ~ Total.Volume + X4046 + X4225 + X4770 + Total.Bags + Small.Bags + Large.Bags + type + year + month + NewRegion, data = raw_avocado, weights=w)
+
+iter=iter+1
+oldcoef=newcoef
+newcoef=fit.w$coef
+}
+iter
+coef(fit.w)
+
+```
+
+
+Use rlm() to fit a robust regression model with Tukey’s bisquare weights
+
+```{r}
+library(MASS)
+tukey.fit.bisquare=rlm(AveragePrice ~ Total.Volume + X4046 + X4225 + X4770 + Total.Bags + Small.Bags + Large.Bags + type + year + month + NewRegion, data = raw_avocado, psi = psi.bisquare)
+tukey.fit.bisquare
+```
+
+Plot weights
+
+```{r}
+plot(tukey.fit.bisquare$w,las=1,cex.axis=1.2,ylab="Weights")
+
+smallweights=which(tukey.fit.bisquare$w <.8)
+showLabels(1:dim(crime)[1],tukey.fit.bisquare$w,raw_avocado$AveragePrice,method=smallweights)
+
+```
+
+
+########################################################################################
+
+Robust Regression CV
+This works!
+
+```{r}
+library(MASS)
+# 10 fold cross validation
+n=nrow(raw_avocado)
+k=10
+groups=c(rep(1:k,floor(n/k)),1:(n-floor(n/k)*k))
+
+set.seed(1,sample.kind = "Rounding")
+cvgroups=sample(groups,n)
+bisquare.pred=rep(0,n)
+huber.pred=rep(0,n)
+lm.pred=rep(0,n)
+
+for(i in 1:k){
+  groupi=(cvgroups==i)
+  # tukey bisquare
+  fit.bisquare=rlm(AveragePrice ~ Total.Volume + X4046 + X4225 + X4770 + Total.Bags + Small.Bags + Large.Bags + type + year + month + NewRegion, data = raw_avocado[!groupi,], psi = psi.bisquare)
+  bisquare.pred[groupi]=predict(fit.bisquare,newdata=raw_avocado[groupi,])
+  # Huber
+  fit.huber=rlm(AveragePrice ~ Total.Volume + X4046 + X4225 + X4770 + Total.Bags + Small.Bags + Large.Bags + type + year + month + NewRegion, data = raw_avocado[!groupi,], psi = psi.huber)
+  huber.pred[groupi]=predict(fit.huber,newdata=raw_avocado[groupi,])
+  # lm
+  lm=lm(AveragePrice ~ ., data= raw_avocado[!groupi,])
+  lm.pred[groupi]=predict(lm,newdata=raw_avocado[groupi,])
+}
+mean((bisquare.pred-raw_avocado$AveragePrice)^2)
+mean((huber.pred-raw_avocado$AveragePrice)^2)
+mean((lm.pred-raw_avocado$AveragePrice)^2)
+# This works now!
+
+```
+
+###########################################################################
+
+Method 2: Try trees
+
+```{r}
+set.seed(1)
+train = sample(1:dim(raw_avocado)[1], 10000, replace=F)
+
+library(tree)
+mytree = tree(AveragePrice ~ ., data= raw_avocado[train,])
+summary(mytree)
+
+
+```
+Try decision tree with CV
+
+```{r}
+
+```
+
+```{r}
+plot(mytree)
+text(mytree, pretty=0)
+
+```
+
+```{r}
+library(randomForest)
+library(gbm)
+
+#raw_avocado=raw_avocado[sample(nrow(raw_avocado),1000,replace=F),]
+
+# 10 fold cross validation
+n=nrow(raw_avocado)
+k=10
+groups=c(rep(1:k,floor(n/k)),1:(n-floor(n/k)*k))
+
+set.seed(1,sample.kind = "Rounding")
+cvgroups=sample(groups,n)
+boost.predict=rep(-1,n)
+lm.pred=rep(0,n)
+
+for(i in 1:k){
+groupi=(cvgroups==i)
+# boost
+boost=gbm(AveragePrice ~ ., data= raw_avocado[!groupi,],distribution = "gaussian",n.trees=1000,shrinkage=.001,interaction.depth = 3)
+boost.predict[groupi]=predict(boost,newdata=raw_avocado[groupi,],n.trees=1000,type="response")
+# lm
+lm=lm(AveragePrice ~ ., data= raw_avocado[!groupi,])
+lm.pred[groupi]=predict(lm,newdata=raw_avocado[groupi,])
+}
+
+mean((boost.predict-raw_avocado$AveragePrice)^2)
+mean((lm.pred-raw_avocado$AveragePrice)^2)
+
+```
+It worked! Takes about a minute to run but it worked!
+
+
+Try bagging/decision tree
+WARNING: This takes FOREVER!!!
+
+```{r}
+# 10 fold cross validation
+library(randomForest)
+
+# 10 fold cross validation
+n=nrow(raw_avocado)
+k=10
+groups=c(rep(1:k,floor(n/k)),1:(n-floor(n/k)*k))
+
+set.seed(1,sample.kind = "Rounding")
+cvgroups=sample(groups,n)
+rf.predict=rep(-1,n)
+bag.predict=rep(-1,n)
+
+for(i in 1:k){
+  groupi=(cvgroups==i)
+# bagging
+  bag=randomForest(AveragePrice ~ ., data= raw_avocado[!groupi,],mtry=12,importance=T)
+  bag.predict[groupi]=predict(bag,newdata=raw_avocado[groupi,])
+# random forest
+  rf=randomForest(AveragePrice ~ ., data = raw_avocado[!groupi,], ntree=100, mtry=4,importance=T)
+  rf.predict[groupi] = predict(rf,newdata=raw_avocado[groupi,])
+}
+
+mean((bag.predict-raw_avocado$AveragePrice)^2)
+mean((rf.predict-raw_avocado$AveragePrice)^2) # 0.007644937
+
+```
+
+
+
+
+
